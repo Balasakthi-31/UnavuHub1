@@ -101,5 +101,6 @@ unavuhub/
 - **Theme:** Warm charcoal dark sidebar + cream white content area
 
 ---
+*Designed by Balasakthi R Final year Student of Nandha College of Technology,Erode.
 
 *UnavuHub — "Unavu" means "Food" in Tamil 🍛*
