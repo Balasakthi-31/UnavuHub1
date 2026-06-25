@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>My Orders — UnavuHub</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+<div class="toast-container position-fixed bottom-0 end-0 p-3" id="toastContainer"></div>
+
+<!-- Navbar -->
+<nav class="navbar navbar-expand-lg">
+  <div class="container">
+    <a class="navbar-brand" href="index.html">Unavu<span>Hub</span></a>
+    <div class="d-flex gap-2 align-items-center ms-auto">
+      <a href="index.html" class="nav-link">Menu</a>
+      <a href="cart.html" class="nav-link">
+        <i class="fas fa-shopping-cart"></i>
+        <span class="cart-count cart-badge">0</span>
+      </a>
+      <button class="btn btn-outline-primary btn-sm" onclick="logout()">Logout</button>
+    </div>
+  </div>
+</nav>
+
+<div class="container py-5">
+  <h1 class="page-title"><i class="fas fa-receipt me-2 text-muted" style="font-size:1.3rem;"></i>My Orders</h1>
+  <p class="text-muted mb-4">Track all your past and current orders</p>
+  <div id="ordersContainer"></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="js/db.js"></script>
+<script>
+  function logout() { DB.clearSession(); DB.clearCart(); window.location.href = 'login.html'; }
+
+  const STEPS = ['pending','confirmed','preparing','out for delivery','delivered'];
+
+  function statusTracker(status) {
+    if (status === 'cancelled') {
+      return `<div class="text-center py-2"><span class="status-badge status-cancelled" style="font-size:.85rem;">❌ Order Cancelled</span></div>`;
+    }
+    const currentIdx = STEPS.indexOf(status);
+    let html = `<div class="status-track mt-3">`;
+    STEPS.forEach((step, i) => {
+      const done   = i < currentIdx;
+      const active = i === currentIdx;
+      const dotCls = done ? 'done' : active ? 'active' : '';
+      const lblCls = done ? 'done' : active ? 'active' : '';
+      if (i > 0) html += `<div class="track-line${done ? ' done' : ''}"></div>`;
+      html += `
+        <div class="track-step">
+          <div class="track-dot ${dotCls}">${done ? '✓' : i + 1}</div>
+          <div class="track-label ${lblCls}">${step.charAt(0).toUpperCase() + step.slice(1)}</div>
+        </div>`;
+    });
+    html += `</div>`;
+    return html;
+  }
+
+  function renderOrders() {
+    if (!DB.isLoggedIn() || DB.isAdmin()) { window.location.href = 'login.html'; return; }
+    const session = DB.getSession();
+    const orders  = DB.getUserOrders(session.id);
+    const el      = document.getElementById('ordersContainer');
+
+    if (!orders.length) {
+      el.innerHTML = `
+        <div class="empty-state">
+          <i class="fas fa-box-open"></i>
+          <h5>No orders yet</h5>
+          <p>Looks like you haven't placed any orders. Start ordering!</p>
+          <a href="index.html" class="btn btn-primary mt-2">Browse Menu</a>
+        </div>`;
+      return;
+    }
+
+    el.innerHTML = orders.map(order => {
+      const canCancel = order.status === 'pending';
+      const itemList  = order.items.map(i => `${i.name} ×${i.qty}`).join(', ');
+      return `
+        <div class="order-card mb-3">
+          <div class="order-header">
+            <div class="d-flex align-items-center gap-3 flex-wrap">
+              <div>
+                <div class="fw-bold" style="font-size:.95rem;">Order ${order.id}</div>
+                <div class="text-muted" style="font-size:.8rem;">${UI.formatDate(order.date)}</div>
+              </div>
+              ${UI.statusBadge(order.status)}
+            </div>
+            <div class="d-flex gap-2 mt-2 mt-sm-0">
+              ${canCancel ? `<button class="btn btn-sm btn-outline-danger" onclick="cancelOrder('${order.id}')">Cancel Order</button>` : ''}
+            </div>
+          </div>
+          <div class="order-body">
+            <div class="row g-3">
+              <div class="col-md-8">
+                <div class="text-muted mb-1" style="font-size:.8rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;">Items Ordered</div>
+                <div style="font-size:.93rem;">${itemList}</div>
+                ${statusTracker(order.status)}
+              </div>
+              <div class="col-md-4 text-md-end">
+                <div class="text-muted" style="font-size:.8rem;">Payment</div>
+                <div class="fw-semibold mb-2" style="font-size:.9rem;">${order.paymentMethod}</div>
+                <div class="text-muted" style="font-size:.8rem;">Total</div>
+                <div class="fw-bold text-primary fs-5">${UI.formatCurrency(order.total)}</div>
+              </div>
+            </div>
+          </div>
+        </div>`;
+    }).join('');
+  }
+
+  function cancelOrder(id) {
+    if (!confirm('Are you sure you want to cancel this order?')) return;
+    DB.cancelOrder(id);
+    Toast.show('Order cancelled successfully.', 'warning');
+    renderOrders();
+  }
+
+  renderOrders();
+  UI.updateCartBadge();
+</script>
+</body>
+</html>

@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Your Cart — UnavuHub</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+<div class="toast-container position-fixed bottom-0 end-0 p-3" id="toastContainer"></div>
+
+<!-- Navbar -->
+<nav class="navbar navbar-expand-lg">
+  <div class="container">
+    <a class="navbar-brand" href="index.html">Unavu<span>Hub</span></a>
+    <div class="d-flex gap-2 align-items-center ms-auto">
+      <a href="index.html" class="btn btn-outline-primary btn-sm">
+        <i class="fas fa-arrow-left me-1"></i>Continue Shopping
+      </a>
+      <a href="orders.html" class="nav-link">My Orders</a>
+      <button class="btn btn-outline-primary btn-sm" onclick="logout()">Logout</button>
+    </div>
+  </div>
+</nav>
+
+<div class="container py-5">
+  <h1 class="page-title mb-4"><i class="fas fa-shopping-cart me-2 text-muted" style="font-size:1.3rem;"></i>Your Cart</h1>
+
+  <div id="cartContent">
+    <!-- Rendered by JS -->
+  </div>
+</div>
+
+<!-- Checkout Modal -->
+<div class="modal fade" id="checkoutModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Confirm Order</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <div class="fw-semibold mb-1">Delivery Address</div>
+          <div id="checkoutAddress" class="text-muted" style="font-size:.9rem;"></div>
+        </div>
+        <hr>
+        <div class="fw-semibold mb-2">Choose Payment Method</div>
+        <div class="d-flex flex-column gap-2" id="paymentOptions">
+          <div class="payment-option" onclick="selectPayment(this,'UPI')">
+            <div class="d-flex align-items-center gap-3">
+              <span style="font-size:1.5rem;">📱</span>
+              <div><div class="fw-semibold">UPI</div><div class="text-muted" style="font-size:.82rem;">Google Pay, PhonePe, BHIM</div></div>
+            </div>
+          </div>
+          <div class="payment-option" onclick="selectPayment(this,'Card')">
+            <div class="d-flex align-items-center gap-3">
+              <span style="font-size:1.5rem;">💳</span>
+              <div><div class="fw-semibold">Credit / Debit Card</div><div class="text-muted" style="font-size:.82rem;">Visa, Mastercard, RuPay</div></div>
+            </div>
+          </div>
+          <div class="payment-option selected" onclick="selectPayment(this,'Cash on Delivery')">
+            <div class="d-flex align-items-center gap-3">
+              <span style="font-size:1.5rem;">💵</span>
+              <div><div class="fw-semibold">Cash on Delivery</div><div class="text-muted" style="font-size:.82rem;">Pay when your order arrives</div></div>
+            </div>
+          </div>
+        </div>
+        <hr>
+        <div class="d-flex justify-content-between fw-bold fs-5 mt-2">
+          <span>Total Payable</span>
+          <span class="text-primary" id="checkoutTotal"></span>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-primary px-4" onclick="placeOrder()">
+          <i class="fas fa-check me-1"></i>Place Order
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="js/db.js"></script>
+<script>
+  let selectedPayment = 'Cash on Delivery';
+
+  function logout() { DB.clearSession(); DB.clearCart(); window.location.href = 'login.html'; }
+
+  function selectPayment(el, method) {
+    selectedPayment = method;
+    document.querySelectorAll('.payment-option').forEach(o => o.classList.remove('selected'));
+    el.classList.add('selected');
+  }
+
+  function renderCart() {
+    if (!DB.isLoggedIn() || DB.isAdmin()) { window.location.href = 'login.html'; return; }
+
+    const cart    = DB.getCart();
+    const content = document.getElementById('cartContent');
+
+    if (!cart.length) {
+      content.innerHTML = `
+        <div class="empty-state">
+          <i class="fas fa-shopping-cart"></i>
+          <h5>Your cart is empty</h5>
+          <p>Browse the menu and add items you like.</p>
+          <a href="index.html" class="btn btn-primary mt-2">Browse Menu</a>
+        </div>`;
+      return;
+    }
+
+    const deliveryFee = DB.cartTotal() > 0 ? 40 : 0;
+    const grandTotal  = DB.cartTotal() + deliveryFee;
+
+    content.innerHTML = `
+      <div class="row g-4">
+        <div class="col-lg-8">
+          <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+              <span>${cart.length} Item${cart.length > 1 ? 's' : ''}</span>
+              <button class="btn btn-sm btn-outline-danger" onclick="clearCart()">
+                <i class="fas fa-trash-alt me-1"></i>Clear Cart
+              </button>
+            </div>
+            ${cart.map(item => `
+              <div class="cart-item">
+                <div class="cart-item-img">${UI.foodEmoji('')}</div>
+                <div class="flex-grow-1">
+                  <div class="cart-item-name">${item.name}</div>
+                  <div class="text-muted" style="font-size:.82rem;">${item.type === 'veg' ? '🟢 Veg' : '🔴 Non-Veg'}</div>
+                  <div class="cart-item-price mt-1">${UI.formatCurrency(item.price)} each</div>
+                </div>
+                <div class="d-flex flex-column align-items-end gap-2">
+                  <div class="qty-control">
+                    <button class="qty-btn" onclick="changeQty('${item.id}', -1)">−</button>
+                    <span class="qty-num">${item.qty}</span>
+                    <button class="qty-btn" onclick="changeQty('${item.id}', 1)">+</button>
+                  </div>
+                  <div class="fw-bold">${UI.formatCurrency(item.price * item.qty)}</div>
+                  <button class="btn btn-sm btn-outline-danger py-0 px-2" onclick="removeItem('${item.id}')">
+                    <i class="fas fa-times"></i>
+                  </button>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+
+        <div class="col-lg-4">
+          <div class="card">
+            <div class="card-header">Order Summary</div>
+            <div class="card-body">
+              <div class="cart-summary">
+                <div class="d-flex justify-content-between mb-2">
+                  <span class="text-muted">Subtotal</span>
+                  <span class="fw-semibold">${UI.formatCurrency(DB.cartTotal())}</span>
+                </div>
+                <div class="d-flex justify-content-between mb-2">
+                  <span class="text-muted">Delivery Fee</span>
+                  <span class="fw-semibold">${UI.formatCurrency(deliveryFee)}</span>
+                </div>
+                <hr>
+                <div class="d-flex justify-content-between">
+                  <span class="fw-bold">Total</span>
+                  <span class="fw-bold text-primary fs-5">${UI.formatCurrency(grandTotal)}</span>
+                </div>
+              </div>
+              <button class="btn btn-primary w-100 mt-3 py-2" onclick="openCheckout(${grandTotal})">
+                <i class="fas fa-credit-card me-2"></i>Proceed to Checkout
+              </button>
+            </div>
+          </div>
+
+          <div class="card mt-3">
+            <div class="card-body">
+              <div class="d-flex gap-2 align-items-start">
+                <i class="fas fa-shield-alt text-success mt-1"></i>
+                <div>
+                  <div class="fw-semibold" style="font-size:.9rem;">Safe & Secure Checkout</div>
+                  <div class="text-muted" style="font-size:.8rem;">Your payment info is encrypted and secure.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>`;
+  }
+
+  function openCheckout(total) {
+    const session = DB.getSession();
+    const user    = DB.getUserById(session.id) || session;
+    document.getElementById('checkoutAddress').textContent = user.address || 'No address on file.';
+    document.getElementById('checkoutTotal').textContent   = UI.formatCurrency(total);
+    new bootstrap.Modal(document.getElementById('checkoutModal')).show();
+  }
+
+  function placeOrder() {
+    const order = DB.placeOrder(selectedPayment);
+    if (!order) { Toast.show('Something went wrong. Please try again.', 'danger'); return; }
+    bootstrap.Modal.getInstance(document.getElementById('checkoutModal')).hide();
+    Toast.show(`Order ${order.id} placed successfully! 🎉`, 'success');
+    setTimeout(() => window.location.href = 'orders.html', 1200);
+  }
+
+  function changeQty(id, delta) {
+    const cart = DB.getCart();
+    const item = cart.find(c => c.id === id);
+    if (!item) return;
+    DB.updateCartQty(id, item.qty + delta);
+    UI.updateCartBadge();
+    renderCart();
+  }
+
+  function removeItem(id) {
+    DB.removeFromCart(id);
+    UI.updateCartBadge();
+    Toast.show('Item removed from cart.', 'warning');
+    renderCart();
+  }
+
+  function clearCart() {
+    if (!confirm('Remove all items from cart?')) return;
+    DB.clearCart();
+    UI.updateCartBadge();
+    renderCart();
+  }
+
+  renderCart();
+</script>
+</body>
+</html>

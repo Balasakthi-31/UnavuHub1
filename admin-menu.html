@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Menu Management — UnavuHub Admin</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+<div class="toast-container position-fixed bottom-0 end-0 p-3" id="toastContainer"></div>
+<div class="admin-layout" id="appRoot"></div>
+
+<!-- Add/Edit Modal -->
+<div class="modal fade" id="itemModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="itemModalTitle">Add Food Item</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="itemForm" novalidate>
+          <input type="hidden" id="itemId" />
+          <div class="row g-3">
+            <div class="col-md-8">
+              <label class="form-label">Food Name *</label>
+              <input type="text" class="form-control" id="itemName" placeholder="e.g. Chicken Biryani" required />
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Type *</label>
+              <select class="form-select" id="itemType">
+                <option value="veg">Veg</option>
+                <option value="non-veg">Non-Veg</option>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Category *</label>
+              <select class="form-select" id="itemCategory">
+                <option>Starters</option>
+                <option>Biryani</option>
+                <option>Curries</option>
+                <option>Breads</option>
+                <option>Desserts</option>
+                <option>Beverages</option>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Price (₹) *</label>
+              <input type="number" class="form-control" id="itemPrice" placeholder="e.g. 280" min="1" required />
+            </div>
+            <div class="col-12">
+              <label class="form-label">Description</label>
+              <textarea class="form-control" id="itemDesc" rows="2" placeholder="Brief description of the dish…"></textarea>
+            </div>
+            <div class="col-md-8">
+              <label class="form-label">Image URL <small class="text-muted">(optional)</small></label>
+              <input type="url" class="form-control" id="itemImage" placeholder="https://…" />
+            </div>
+            <div class="col-md-4 d-flex align-items-end">
+              <div class="form-check mb-1">
+                <input class="form-check-input" type="checkbox" id="itemPopular" />
+                <label class="form-check-label fw-semibold" for="itemPopular">⭐ Mark as Popular</label>
+              </div>
+            </div>
+          </div>
+          <div id="itemErr" class="alert alert-danger py-2 mt-3 d-none"></div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-primary" onclick="saveItem()">
+          <i class="fas fa-save me-1"></i>Save Item
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Delete Confirm Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-sm">
+    <div class="modal-content">
+      <div class="modal-body text-center py-4">
+        <i class="fas fa-triangle-exclamation text-danger" style="font-size:2.5rem;"></i>
+        <h5 class="mt-3">Delete this item?</h5>
+        <p class="text-muted" style="font-size:.9rem;">This cannot be undone.</p>
+        <input type="hidden" id="deleteId" />
+      </div>
+      <div class="modal-footer justify-content-center border-0 pt-0">
+        <button class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-danger" onclick="confirmDelete()">Delete</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="js/db.js"></script>
+<script src="js/admin.js"></script>
+<script>
+  guardAdmin();
+  let searchQuery = '';
+
+  function render() {
+    const root = document.getElementById('appRoot');
+    const menu = DB.getMenu().filter(i =>
+      !searchQuery || i.name.toLowerCase().includes(searchQuery) || i.category.toLowerCase().includes(searchQuery)
+    );
+
+    root.innerHTML = buildAdminSidebar('menu') + `
+      <div class="admin-main">
+        ${buildAdminTopbar('Menu Management')}
+        <div class="admin-content">
+          <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
+            <h1 class="page-title mb-0">Menu Items <span class="text-muted" style="font-size:1rem;font-weight:400;">(${menu.length})</span></h1>
+            <div class="d-flex gap-2 flex-wrap">
+              <div class="input-group" style="max-width:240px;">
+                <span class="input-group-text"><i class="fas fa-search"></i></span>
+                <input type="text" class="form-control" placeholder="Search items…" oninput="onSearch(this.value)" value="${searchQuery}" />
+              </div>
+              <button class="btn btn-primary" onclick="openAddModal()">
+                <i class="fas fa-plus me-1"></i>Add Item
+              </button>
+            </div>
+          </div>
+
+          <div class="table-wrap">
+            ${menu.length ? `
+            <table class="table table-hover mb-0">
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Category</th>
+                  <th>Type</th>
+                  <th>Price</th>
+                  <th>Popular</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${menu.map(item => `
+                <tr>
+                  <td>
+                    <div class="d-flex align-items-center gap-2">
+                      <div style="width:40px;height:40px;border-radius:8px;background:var(--primary-light);display:flex;align-items:center;justify-content:center;font-size:1.3rem;flex-shrink:0;">
+                        ${item.image ? `<img src="${item.image}" style="width:100%;height:100%;object-fit:cover;border-radius:8px;" onerror="this.parentNode.textContent='${UI.foodEmoji(item.category)}'">` : UI.foodEmoji(item.category)}
+                      </div>
+                      <div>
+                        <div class="fw-semibold">${item.name}</div>
+                        <div class="text-muted" style="font-size:.78rem;max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${item.description || '—'}</div>
+                      </div>
+                    </div>
+                  </td>
+                  <td>${item.category}</td>
+                  <td>${UI.vegBadge(item.type)}</td>
+                  <td class="fw-bold text-primary">${UI.formatCurrency(item.price)}</td>
+                  <td>
+                    <button class="btn btn-sm ${item.popular ? 'btn-warning' : 'btn-outline-secondary'}" onclick="togglePopular('${item.id}')">
+                      ${item.popular ? '⭐ Popular' : '☆ Mark'}
+                    </button>
+                  </td>
+                  <td>
+                    <div class="d-flex gap-1">
+                      <button class="table-action-btn text-primary" title="Edit" onclick="openEditModal('${item.id}')">
+                        <i class="fas fa-pen"></i>
+                      </button>
+                      <button class="table-action-btn text-danger" title="Delete" onclick="openDeleteModal('${item.id}')">
+                        <i class="fas fa-trash"></i>
+                      </button>
+                    </div>
+                  </td>
+                </tr>`).join('')}
+              </tbody>
+            </table>` : `
+            <div class="empty-state">
+              <i class="fas fa-utensils"></i>
+              <h5>No items found</h5>
+              <p>${searchQuery ? 'Try a different search.' : 'Add your first menu item!'}</p>
+            </div>`}
+          </div>
+        </div>
+      </div>`;
+
+    setSidebarActive('menu');
+  }
+
+  function onSearch(val) { searchQuery = val.toLowerCase(); render(); }
+
+  /* ── Add / Edit ── */
+  function openAddModal() {
+    document.getElementById('itemId').value    = '';
+    document.getElementById('itemModalTitle').textContent = 'Add Food Item';
+    document.getElementById('itemForm').reset();
+    document.getElementById('itemErr').classList.add('d-none');
+    new bootstrap.Modal(document.getElementById('itemModal')).show();
+  }
+
+  function openEditModal(id) {
+    const item = DB.getMenuItem(id);
+    if (!item) return;
+    document.getElementById('itemId').value       = id;
+    document.getElementById('itemModalTitle').textContent = 'Edit Food Item';
+    document.getElementById('itemName').value     = item.name;
+    document.getElementById('itemType').value     = item.type;
+    document.getElementById('itemCategory').value = item.category;
+    document.getElementById('itemPrice').value    = item.price;
+    document.getElementById('itemDesc').value     = item.description || '';
+    document.getElementById('itemImage').value    = item.image || '';
+    document.getElementById('itemPopular').checked= item.popular;
+    document.getElementById('itemErr').classList.add('d-none');
+    new bootstrap.Modal(document.getElementById('itemModal')).show();
+  }
+
+  function saveItem() {
+    const id       = document.getElementById('itemId').value;
+    const name     = document.getElementById('itemName').value.trim();
+    const type     = document.getElementById('itemType').value;
+    const category = document.getElementById('itemCategory').value;
+    const price    = parseFloat(document.getElementById('itemPrice').value);
+    const desc     = document.getElementById('itemDesc').value.trim();
+    const image    = document.getElementById('itemImage').value.trim();
+    const popular  = document.getElementById('itemPopular').checked;
+    const errEl    = document.getElementById('itemErr');
+
+    if (!name || !price || price <= 0) {
+      errEl.textContent = 'Name and a valid price are required.'; errEl.classList.remove('d-none'); return;
+    }
+    errEl.classList.add('d-none');
+
+    const data = { name, type, category, price, description: desc, image, popular };
+    if (id) { DB.updateMenuItem(id, data); Toast.show('Item updated.', 'success'); }
+    else    { DB.addMenuItem(data);        Toast.show('Item added to menu.', 'success'); }
+
+    bootstrap.Modal.getInstance(document.getElementById('itemModal')).hide();
+    render();
+  }
+
+  function togglePopular(id) {
+    const item = DB.getMenuItem(id);
+    if (!item) return;
+    DB.updateMenuItem(id, { popular: !item.popular });
+    Toast.show(item.popular ? 'Removed from popular.' : 'Marked as popular! ⭐', 'info');
+    render();
+  }
+
+  /* ── Delete ── */
+  function openDeleteModal(id) {
+    document.getElementById('deleteId').value = id;
+    new bootstrap.Modal(document.getElementById('deleteModal')).show();
+  }
+  function confirmDelete() {
+    const id = document.getElementById('deleteId').value;
+    DB.deleteMenuItem(id);
+    bootstrap.Modal.getInstance(document.getElementById('deleteModal')).hide();
+    Toast.show('Item deleted.', 'warning');
+    render();
+  }
+
+  render();
+</script>
+</body>
+</html>

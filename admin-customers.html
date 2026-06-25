@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Customers — UnavuHub Admin</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+<div class="toast-container position-fixed bottom-0 end-0 p-3" id="toastContainer"></div>
+<div class="admin-layout" id="appRoot"></div>
+
+<!-- Customer Orders Modal -->
+<div class="modal fade" id="customerOrdersModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="customerOrdersTitle">Order History</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" id="customerOrdersBody"></div>
+      <div class="modal-footer">
+        <button class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="js/db.js"></script>
+<script src="js/admin.js"></script>
+<script>
+  guardAdmin();
+  let searchQuery = '';
+
+  function render() {
+    let users  = DB.getUsers();
+    const orders = DB.getOrders();
+
+    if (searchQuery) users = users.filter(u =>
+      u.name.toLowerCase().includes(searchQuery) ||
+      u.email.toLowerCase().includes(searchQuery) ||
+      u.phone.includes(searchQuery)
+    );
+
+    const root = document.getElementById('appRoot');
+
+    root.innerHTML = buildAdminSidebar('customers') + `
+      <div class="admin-main">
+        ${buildAdminTopbar('Customer Management')}
+        <div class="admin-content">
+          <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
+            <h1 class="page-title mb-0">Customers <span class="text-muted" style="font-size:1rem;font-weight:400;">(${users.length})</span></h1>
+            <div class="input-group" style="max-width:260px;">
+              <span class="input-group-text"><i class="fas fa-search"></i></span>
+              <input type="text" class="form-control" placeholder="Search name, email, phone…" oninput="onSearch(this.value)" value="${searchQuery}" />
+            </div>
+          </div>
+
+          <div class="table-wrap">
+            ${users.length ? `
+            <table class="table table-hover mb-0">
+              <thead>
+                <tr>
+                  <th>Customer</th>
+                  <th>Phone</th>
+                  <th>Address</th>
+                  <th>Joined</th>
+                  <th>Total Orders</th>
+                  <th>Total Spent</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${users.map(user => {
+                  const userOrders = orders.filter(o => o.userId === user.id);
+                  const totalSpent = userOrders.filter(o => o.status !== 'cancelled').reduce((s, o) => s + o.total, 0);
+                  return `
+                  <tr>
+                    <td>
+                      <div class="d-flex align-items-center gap-2">
+                        <div style="width:36px;height:36px;border-radius:50%;background:var(--primary);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:.9rem;flex-shrink:0;">
+                          ${user.name.charAt(0).toUpperCase()}
+                        </div>
+                        <div>
+                          <div class="fw-semibold">${user.name}</div>
+                          <div class="text-muted" style="font-size:.78rem;">${user.email}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td>${user.phone}</td>
+                    <td style="max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${user.address}">
+                      ${user.address || '—'}
+                    </td>
+                    <td style="font-size:.82rem;">${UI.formatDate(user.createdAt)}</td>
+                    <td>
+                      <span class="fw-bold">${userOrders.length}</span>
+                      <span class="text-muted" style="font-size:.78rem;"> orders</span>
+                    </td>
+                    <td class="fw-bold text-primary">${UI.formatCurrency(totalSpent)}</td>
+                    <td>
+                      <button class="table-action-btn text-info" title="View Orders" onclick="viewCustomerOrders('${user.id}', '${user.name.replace(/'/g, "\\'")}')">
+                        <i class="fas fa-eye"></i>
+                      </button>
+                    </td>
+                  </tr>`;
+                }).join('')}
+              </tbody>
+            </table>` : `
+            <div class="empty-state">
+              <i class="fas fa-users"></i>
+              <h5>No customers found</h5>
+              <p>${searchQuery ? 'Try a different search.' : 'Customers who register will appear here.'}</p>
+            </div>`}
+          </div>
+        </div>
+      </div>`;
+
+    setSidebarActive('customers');
+  }
+
+  function onSearch(val) { searchQuery = val.toLowerCase(); render(); }
+
+  function viewCustomerOrders(userId, name) {
+    const orders = DB.getUserOrders(userId);
+    document.getElementById('customerOrdersTitle').textContent = `${name}'s Order History`;
+    const body = document.getElementById('customerOrdersBody');
+
+    if (!orders.length) {
+      body.innerHTML = `<div class="empty-state py-3"><i class="fas fa-box-open"></i><h6>No orders yet</h6></div>`;
+    } else {
+      body.innerHTML = orders.map(order => `
+        <div class="border rounded p-3 mb-3">
+          <div class="d-flex justify-content-between flex-wrap gap-2 mb-2">
+            <div>
+              <span class="fw-bold text-primary">${order.id}</span>
+              <span class="text-muted ms-2" style="font-size:.8rem;">${UI.formatDate(order.date)}</span>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+              ${UI.statusBadge(order.status)}
+              <span class="fw-bold">${UI.formatCurrency(order.total)}</span>
+            </div>
+          </div>
+          <div class="text-muted" style="font-size:.85rem;">
+            ${order.items.map(i => `${i.name} ×${i.qty}`).join(' · ')}
+          </div>
+          <div class="text-muted mt-1" style="font-size:.8rem;">Payment: ${order.paymentMethod}</div>
+        </div>`).join('');
+    }
+
+    new bootstrap.Modal(document.getElementById('customerOrdersModal')).show();
+  }
+
+  render();
+</script>
+</body>
+</html>

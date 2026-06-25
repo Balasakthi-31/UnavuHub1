@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>UnavuHub — Online Food Ordering</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+  <link rel="stylesheet" href="css/style.css" />
+  <style>
+    /* ── Rating Modal Styles ── */
+    .rating-modal-overlay {
+      display:none; position:fixed; inset:0; background:rgba(0,0,0,.6);
+      z-index:9999; align-items:center; justify-content:center;
+    }
+    .rating-modal-overlay.active { display:flex; }
+    .rating-modal {
+      background:var(--card-bg, #1e1e2e); color:var(--text, #e2e8f0);
+      border-radius:16px; padding:2rem; width:min(480px,92vw);
+      box-shadow:0 25px 60px rgba(0,0,0,.5);
+      animation: popIn .2s ease;
+    }
+    @keyframes popIn { from { transform:scale(.85); opacity:0; } to { transform:scale(1); opacity:1; } }
+    .rating-modal h5 { font-weight:700; margin-bottom:.25rem; }
+    .star-picker { display:flex; gap:.4rem; margin:1rem 0; }
+    .star-picker i { font-size:2rem; cursor:pointer; color:#d1d5db; transition:color .15s; }
+    .star-picker i.lit { color:#f59e0b; }
+    .rating-review-input {
+      width:100%; border-radius:10px; border:1.5px solid rgba(255,255,255,.12);
+      background:rgba(255,255,255,.06); color:inherit; padding:.75rem 1rem;
+      font-size:.93rem; resize:none; margin-bottom:1rem;
+      transition:border-color .2s;
+    }
+    .rating-review-input:focus { outline:none; border-color:var(--primary,#f97316); }
+    .existing-reviews { margin-top:1.5rem; }
+    .review-item {
+      background:rgba(255,255,255,.05); border-radius:10px;
+      padding:.75rem 1rem; margin-bottom:.6rem; font-size:.88rem;
+    }
+    .review-item .reviewer { font-weight:600; margin-bottom:.25rem; }
+    .review-item .review-text { color:rgba(255,255,255,.7); }
+    /* Card inline rating */
+    .card-rating { display:flex; align-items:center; gap:.4rem; font-size:.82rem; margin:.35rem 0 .5rem; }
+    .card-rating .rating-count { color:rgba(255,255,255,.5); font-size:.78rem; }
+    .rate-btn {
+      background:none; border:1.5px solid rgba(255,255,255,.2); border-radius:20px;
+      color:rgba(255,255,255,.7); font-size:.75rem; padding:.2rem .65rem;
+      cursor:pointer; transition:all .2s;
+    }
+    .rate-btn:hover { border-color:#f59e0b; color:#f59e0b; }
+  </style>
+</head>
+<body>
+
+<!-- Toast Container -->
+<div class="toast-container position-fixed bottom-0 end-0 p-3" id="toastContainer"></div>
+
+<!-- ── Rating Modal ── -->
+<div class="rating-modal-overlay" id="ratingModalOverlay" onclick="closeRatingModal(event)">
+  <div class="rating-modal" onclick="event.stopPropagation()">
+    <div class="d-flex justify-content-between align-items-start mb-1">
+      <div>
+        <h5 id="ratingModalName">Rate this dish</h5>
+        <small id="ratingModalCat" style="color:rgba(255,255,255,.5)"></small>
+      </div>
+      <button onclick="closeRatingModal()" style="background:none;border:none;color:inherit;font-size:1.4rem;line-height:1;cursor:pointer;">&times;</button>
+    </div>
+    <div class="star-picker" id="starPicker">
+      <i class="far fa-star" data-v="1"></i>
+      <i class="far fa-star" data-v="2"></i>
+      <i class="far fa-star" data-v="3"></i>
+      <i class="far fa-star" data-v="4"></i>
+      <i class="far fa-star" data-v="5"></i>
+    </div>
+    <p id="starLabel" style="font-size:.85rem;color:rgba(255,255,255,.5);margin-bottom:.75rem;height:1.2em;"></p>
+    <textarea id="ratingReviewInput" class="rating-review-input" rows="3" placeholder="Share your experience (optional)…"></textarea>
+    <div class="d-flex gap-2">
+      <button class="btn btn-primary flex-grow-1" onclick="submitRating()">Submit Rating</button>
+      <button class="btn btn-outline-secondary" onclick="closeRatingModal()">Cancel</button>
+    </div>
+    <div class="existing-reviews" id="existingReviews"></div>
+  </div>
+</div>
+
+<!-- ── Navbar ── -->
+<nav class="navbar navbar-expand-lg">
+  <div class="container">
+    <a class="navbar-brand" href="index.html">Unavu<span>Hub</span></a>
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNav">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="mainNav">
+      <ul class="navbar-nav ms-auto align-items-center gap-1">
+        <li class="nav-item"><a class="nav-link active" href="index.html">Menu</a></li>
+        <li class="nav-item">
+          <a class="nav-link" href="cart.html">
+            <i class="fas fa-shopping-cart"></i>
+            <span class="cart-count cart-badge">0</span>
+          </a>
+        </li>
+        <li class="nav-item" id="navAuth"></li>
+      </ul>
+    </div>
+  </div>
+</nav>
+
+<!-- ── Hero ── -->
+<section class="hero">
+  <div class="container">
+    <div class="row align-items-center g-4">
+      <div class="col-lg-6">
+        <p style="color:var(--primary);font-weight:700;letter-spacing:1px;font-size:.85rem;text-transform:uppercase;margin-bottom:.5rem;">🍽️Tiruppur's Favourite Food App</p>
+        <h1 class="hero-title">Order <span>Delicious</span><br>Food, Delivered Fast</h1>
+        <p class="hero-sub mt-3 mb-4">Explore a curated menu of authentic Indian dishes. From biryanis to desserts — fresh, hot, and at your door.</p>
+        <div class="search-wrap d-flex align-items-center gap-2">
+          <i class="fas fa-search text-muted ms-2"></i>
+          <input type="text" id="searchInput" placeholder="Search for biryani, parotta, dosa…" class="py-2 px-1" />
+          <button class="btn btn-primary px-4" onclick="applyFilters()">Search</button>
+        </div>
+      </div>
+      <div class="col-lg-6 text-center d-none d-lg-block">
+        <div style="font-size:9rem;filter:drop-shadow(0 20px 40px rgba(249,115,22,.4))">🍛</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Menu Section ── -->
+<main class="container py-5">
+
+  <!-- Filters Row -->
+  <div class="d-flex flex-wrap align-items-center gap-3 mb-4">
+    <div class="d-flex flex-wrap gap-2" id="categoryPills"></div>
+    <div class="ms-auto d-flex gap-2 flex-wrap">
+      <button class="category-pill active" id="filterAll"   onclick="setTypeFilter('all')">All</button>
+      <button class="category-pill"        id="filterVeg"   onclick="setTypeFilter('veg')">🥦 Veg</button>
+      <button class="category-pill"        id="filterNV"    onclick="setTypeFilter('non-veg')">🍗 Non-Veg</button>
+    </div>
+  </div>
+
+  <!-- Food Grid -->
+  <div class="row g-4" id="foodGrid"></div>
+  <div id="emptyState" class="empty-state d-none">
+    <i class="fas fa-search-minus"></i>
+    <h5>No items found</h5>
+    <p>Try a different search or category filter.</p>
+  </div>
+  
+</main>
+<!-- ===== Footer ===== -->
+<footer class="footer">
+  <div class="container">
+    <div class="row gy-4">
+
+      <div class="col-lg-4">
+        <h3 class="footer-logo">Unavu<span>Hub</span></h3>
+        <p>
+          Order your favorite food anytime, anywhere.
+          Fresh, delicious, and delivered quickly to your doorstep.
+        </p>
+
+        <div class="social-icons">
+          <a href="#"><i class="fab fa-facebook-f"></i></a>
+          <a href="#"><i class="fab fa-instagram"></i></a>
+          <a href="#"><i class="fab fa-x-twitter"></i></a>
+          <a href="#"><i class="fab fa-linkedin-in"></i></a>
+        </div>
+      </div>
+
+      <div class="col-lg-2 col-md-4">
+        <h5>Quick Links</h5>
+        <ul>
+          <li><a href="index.html">Menu</a></li>
+          <li><a href="cart.html">Cart</a></li>
+          <li><a href="orders.html">Orders</a></li>
+          <li><a href="login.html">Login</a></li>
+        </ul>
+      </div>
+
+      <div class="col-lg-3 col-md-4">
+        <h5>Categories</h5>
+        <ul>
+          <li>Breakfast</li>
+          <li>Lunch</li>
+          <li>Dinner</li>
+          <li>Biryani</li>
+          <li>Beverages</li>
+        </ul>
+      </div>
+
+      <div class="col-lg-3 col-md-4">
+        <h5>Contact</h5>
+
+        <p>
+          <i class="fas fa-location-dot"></i>
+          Tiruppur, Tamil Nadu
+        </p>
+
+        <p>
+          <i class="fas fa-phone"></i>
+          +91 98765 43210
+        </p>
+
+        <p>
+          <i class="fas fa-envelope"></i>
+          support@unavuhub.com
+        </p>
+      </div>
+
+    </div>
+
+    <hr>
+
+    <div class="footer-bottom">
+      © 2026 UnavuHub. All Rights Reserved.
+    </div>
+
+  </div>
+</footer>
+
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="js/db.js"></script>
+<script>
+  let activeCategory = 'All';
+  let activeType     = 'all';
+
+  /* ── Navbar auth state ── */
+  function renderNav() {
+    const s  = DB.getSession();
+    const el = document.getElementById('navAuth');
+    if (!s) {
+      el.innerHTML = `<div class="d-flex gap-2">
+        <a href="login.html" class="btn btn-outline-primary btn-sm">Login</a>
+        <a href="register.html" class="btn btn-primary btn-sm">Register</a>
+      </div>`;
+    } else if (s.role === 'admin') {
+      el.innerHTML = `<a href="admin-dashboard.html" class="btn btn-primary btn-sm"><i class="fas fa-gauge-high me-1"></i>Dashboard</a>`;
+    } else {
+      el.innerHTML = `<div class="d-flex gap-2 align-items-center">
+        <a href="orders.html" class="nav-link">My Orders</a>
+        <button class="btn btn-outline-primary btn-sm" onclick="logout()">Logout</button>
+      </div>`;
+    }
+  }
+  function logout() { DB.clearSession(); DB.clearCart(); window.location.reload(); }
+
+  /* ── Categories ── */
+  function buildCategories() {
+    const menu = DB.getMenu();
+    const cats = ['All', ...new Set(menu.map(i => i.category))];
+    const el   = document.getElementById('categoryPills');
+    el.innerHTML = cats.map(c => `
+      <button class="category-pill${c === 'All' ? ' active' : ''}" onclick="setCategory('${c}')">${UI.foodEmoji(c)} ${c}</button>
+    `).join('');
+  }
+
+  function setCategory(cat) {
+    activeCategory = cat;
+    document.querySelectorAll('#categoryPills .category-pill').forEach(b => {
+      b.classList.toggle('active', b.textContent.trim().endsWith(cat));
+    });
+    renderGrid();
+  }
+
+  function setTypeFilter(type) {
+    activeType = type;
+    ['filterAll','filterVeg','filterNV'].forEach(id => document.getElementById(id).classList.remove('active'));
+    document.getElementById({ all:'filterAll', veg:'filterVeg', 'non-veg':'filterNV' }[type]).classList.add('active');
+    renderGrid();
+  }
+
+  function applyFilters() { renderGrid(); }
+
+  /* ── Render Grid ── */
+  function renderGrid() {
+    const query = document.getElementById('searchInput').value.toLowerCase();
+    let items   = DB.getMenu();
+
+    if (activeCategory !== 'All') items = items.filter(i => i.category === activeCategory);
+    if (activeType !== 'all')     items = items.filter(i => i.type === activeType);
+    if (query) items = items.filter(i =>
+      i.name.toLowerCase().includes(query) ||
+      i.category.toLowerCase().includes(query) ||
+      i.description.toLowerCase().includes(query)
+    );
+
+    const grid  = document.getElementById('foodGrid');
+    const empty = document.getElementById('emptyState');
+    if (!items.length) { grid.innerHTML = ''; empty.classList.remove('d-none'); return; }
+    empty.classList.add('d-none');
+
+    const cart    = DB.getCart();
+    const session = DB.getSession();
+
+    grid.innerHTML = items.map(item => {
+      const inCart  = cart.find(c => c.id === item.id);
+      const { avg, count } = DB.getItemAvgRating(item.id);
+      const imgEl   = item.image
+        ? `<img src="${item.image}" class="food-card-img" alt="${item.name}" loading="lazy"
+               onerror="this.parentNode.innerHTML='<div class=food-card-img-placeholder>${UI.foodEmoji(item.category)}</div>'">`
+        : `<div class="food-card-img-placeholder">${UI.foodEmoji(item.category)}</div>`;
+
+      const ratingRow = count > 0
+        ? `<div class="card-rating">
+             ${UI.renderStars(avg)}
+             <span style="color:#f59e0b;font-weight:600;font-size:.82rem;">${avg}</span>
+             <span class="rating-count">(${count})</span>
+             ${session && session.role==='customer' ? `<button class="rate-btn ms-auto" onclick="openRatingModal('${item.id}')"><i class="fas fa-star me-1" style="font-size:.7rem;"></i>Rate</button>` : ''}
+           </div>`
+        : `<div class="card-rating">
+             ${UI.renderStars(0)}
+             <span class="rating-count">No ratings yet</span>
+             ${session && session.role==='customer' ? `<button class="rate-btn ms-auto" onclick="openRatingModal('${item.id}')"><i class="fas fa-star me-1" style="font-size:.7rem;"></i>Be first!</button>` : ''}
+           </div>`;
+
+      return `
+        <div class="col-sm-6 col-lg-4 col-xl-3">
+          <div class="food-card">
+            ${imgEl}
+            <div class="food-card-body">
+              <div class="d-flex align-items-center gap-2 mb-1">
+                ${UI.vegBadge(item.type)}
+                ${item.popular ? '<span class="popular-tag">⭐ Popular</span>' : ''}
+              </div>
+              <div class="food-name">${item.name}</div>
+              ${ratingRow}
+              <div class="food-desc text-muted mb-2">${item.description}</div>
+              <div class="d-flex align-items-center justify-content-between mt-auto">
+                <span class="food-price">${UI.formatCurrency(item.price)}</span>
+                ${inCart
+                  ? `<div class="qty-control">
+                       <button class="qty-btn" onclick="changeQty('${item.id}', -1)">−</button>
+                       <span class="qty-num">${inCart.qty}</span>
+                       <button class="qty-btn" onclick="changeQty('${item.id}', 1)">+</button>
+                     </div>`
+                  : `<button class="btn btn-primary btn-sm" onclick="addItem('${item.id}')">
+                       <i class="fas fa-plus me-1"></i>Add
+                     </button>`
+                }
+              </div>
+            </div>
+          </div>
+        </div>`;
+    }).join('');
+  }
+
+  /* ── Cart Actions ── */
+  function addItem(id) {
+    const s = DB.getSession();
+    if (!s) { Toast.show('Please login to add items to cart.', 'warning'); return; }
+    if (s.role === 'admin') { Toast.show('Admins cannot place orders.', 'warning'); return; }
+    const item = DB.getMenuItem(id);
+    if (!item) return;
+    DB.addToCart(item);
+    UI.updateCartBadge();
+    Toast.show(`<i class="fas fa-check-circle me-2"></i>${item.name} added to cart!`, 'success');
+    renderGrid();
+  }
+
+  function changeQty(id, delta) {
+    const cart = DB.getCart();
+    const item = cart.find(c => c.id === id);
+    if (!item) return;
+    DB.updateCartQty(id, item.qty + delta);
+    UI.updateCartBadge();
+    renderGrid();
+  }
+
+  /* ── Rating Modal ── */
+  let currentRatingItemId = null;
+  let currentStarValue    = 0;
+  const starLabels = ['', 'Poor 😞', 'Fair 😐', 'Good 😊', 'Great 😄', 'Excellent 🤩'];
+
+  function openRatingModal(itemId) {
+    const s = DB.getSession();
+    if (!s || s.role !== 'customer') { Toast.show('Please login to rate.', 'warning'); return; }
+    currentRatingItemId = itemId;
+    const item      = DB.getMenuItem(itemId);
+    const existing  = DB.getUserRatingForItem(itemId);
+    currentStarValue = existing ? existing.rating : 0;
+
+    document.getElementById('ratingModalName').textContent = item.name;
+    document.getElementById('ratingModalCat').textContent  = item.category;
+    document.getElementById('ratingReviewInput').value     = existing ? existing.review : '';
+    renderStarPicker(currentStarValue);
+    document.getElementById('starLabel').textContent = starLabels[currentStarValue] || 'Tap a star to rate';
+
+    // Show existing reviews
+    const reviews = DB.getItemRatings(itemId);
+    const revEl   = document.getElementById('existingReviews');
+    if (reviews.length) {
+      revEl.innerHTML = `<h6 style="margin-top:1.5rem;font-weight:700;font-size:.9rem;">What others say</h6>` +
+        reviews.slice(0, 5).map(r => `
+          <div class="review-item">
+            <div class="reviewer d-flex align-items-center gap-2">
+              <span>${r.userName}</span>
+              <span style="margin-left:auto;">${UI.renderStars(r.rating)}</span>
+            </div>
+            ${r.review ? `<div class="review-text">${r.review}</div>` : ''}
+          </div>`).join('');
+    } else { revEl.innerHTML = ''; }
+
+    document.getElementById('ratingModalOverlay').classList.add('active');
+  }
+
+  function closeRatingModal(e) {
+    if (e && e.target !== document.getElementById('ratingModalOverlay')) return;
+    document.getElementById('ratingModalOverlay').classList.remove('active');
+    currentRatingItemId = null;
+    currentStarValue    = 0;
+  }
+  // Allow close via button (no event arg)
+  const origClose = closeRatingModal;
+  window.closeRatingModal = function(e) {
+    if (!e) { document.getElementById('ratingModalOverlay').classList.remove('active'); return; }
+    origClose(e);
+  };
+
+  function renderStarPicker(val) {
+    document.querySelectorAll('#starPicker i').forEach(i => {
+      const v = parseInt(i.dataset.v);
+      i.className = v <= val ? 'fas fa-star lit' : 'far fa-star';
+    });
+  }
+
+  document.querySelectorAll('#starPicker i').forEach(star => {
+    star.addEventListener('mouseover', function() {
+      const v = parseInt(this.dataset.v);
+      document.querySelectorAll('#starPicker i').forEach(i => {
+        i.className = parseInt(i.dataset.v) <= v ? 'fas fa-star lit' : 'far fa-star';
+      });
+      document.getElementById('starLabel').textContent = starLabels[v];
+    });
+    star.addEventListener('mouseout', function() {
+      renderStarPicker(currentStarValue);
+      document.getElementById('starLabel').textContent = starLabels[currentStarValue] || 'Tap a star to rate';
+    });
+    star.addEventListener('click', function() {
+      currentStarValue = parseInt(this.dataset.v);
+      renderStarPicker(currentStarValue);
+      document.getElementById('starLabel').textContent = starLabels[currentStarValue];
+    });
+  });
+
+  function submitRating() {
+    if (!currentStarValue) { Toast.show('Please select a star rating.', 'warning'); return; }
+    const review = document.getElementById('ratingReviewInput').value.trim();
+    const result = DB.addRating(currentRatingItemId, currentStarValue, review);
+    if (result.ok) {
+      Toast.show('<i class="fas fa-star me-2" style="color:#f59e0b"></i>Rating submitted! Thank you!', 'success');
+      document.getElementById('ratingModalOverlay').classList.remove('active');
+      renderGrid();
+    } else {
+      Toast.show(result.msg, 'danger');
+    }
+  }
+
+  /* ── Search on enter ── */
+  document.getElementById('searchInput').addEventListener('keyup', e => { if (e.key === 'Enter') applyFilters(); });
+
+  /* ── Init ── */
+  renderNav();
+  buildCategories();
+  renderGrid();
+</script>
+
+</body>
+</html>
